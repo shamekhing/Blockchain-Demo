@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Sep 23 01:02:30 2019
+
+@author: Shamekh
+"""
+# import libraries 
+import datetime # each block has its own time stamp
+import hashlib # to hash the blocks
+import json # encode blocks before hashing
+from flask import Flask, jsonify, request # webapp, postman res, node connecting (decenterlized)
+from pymongo import MongoClient
+import requests # catch node for consensus
+from uuid import uuid4 # create addresses for nodes 
+from urllib.parse import urlparse # parse node URL
+#from bson.objectid import ObjectId
+
+################################
+## part 1 building blockchain ##
+################################
+
+"""
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return json.JSONEncoder.default(self, o)
+"""
+
+class Database:
+    def __init__(self): # constructor , self = this (object)
+        self.client = MongoClient('mongodb://localhost:27017/')  # connect to mongodb URI
+        self.db = self.client['nanocoin'] # intiate database
+        self.network = self.db.available_network
+        self.transactions = self.db.bending_transactions 
+        self.chain = self.db.chain
+
+        
+    def add_transaction(self, transaction):
+        transaction_id = self.transactions.insert_one(transaction).inserted_id
+        return str(transaction_id)
+     
+    def add_block(self, block):
+        result = []
+        transactions = self.transactions.find()
+        for transaction in transactions:
+            transaction['_id'] = str(transaction['_id'])
+            result.append(transaction)    
+        data = {'index':block['index'],
+                'timestamp':block['timestamp'],
+                'proof':block['proof'],
+                'transactions': result,
+                'previous_hash':block['previous_hash']}  
+        block_id = self.chain.insert_one(data).inserted_id
+        self.transactions.drop() # clear transactions 
+        return str(block_id)
+        
+
+class Blockchain:
+    
+    def __init__(self): # constructor , self = this (object)
+        self.chain = [] # array of blocks
+        self.transactions = [] # order matter
+        self.create_block(proof = 1, prev_hash = '0') # genesis block
+        self.nodes = set() # other users for consensus protocol
+        
+    def create_block(self, proof, prev_hash):
+        block = {'index': len(self.chain) + 1,
+                 'timestamp': str(datetime.datetime.now()),
+                 'proof': proof,
+                 'transactions': self.transactions,
+                 'previous_hash': prev_hash}
+        self.transactions = [] # make it empty to avoid having 2 block with mutual transactions
+        self.chain.append(block) # add block to chain
+        return block
+    
+    def get_prev_block(self):
+        return self.chain[-1]
+    
+    def proof_of_work(self, prev_proof):
+        new_proof = 1
+        check_proof = False
+        while check_proof is False:
+            hash_operation = hashlib.sha256(str(new_proof**2-prev_proof**2).encode()).hexdigest() # mest be nonsymmitrical 
+            if hash_operation[:4] == '0000':
+                check_proof = True
+            else:
+                new_proof += 1
+        return new_proof
+    
+    def hash(self, block):
+        encoded_block = json.dumps(block, sort_keys = True).encode() # suitable format for sha256, json for web uses, dumps -> dictionary to str
+        return hashlib.sha256(encoded_block).hexdigest()
+    
+    def is_chain_valid(self, chain):
+        prev_block = chain[0]
+        block_index = 1
+        while block_index < len(chain):
+            block = chain[block_index]
+            # check the prev block hash is correct
+            if block['previous_hash'] != self.hash(prev_block):
+                return False
+            # check PoW
+            prev_proof = prev_block['proof']
+            proof = block['proof']
+            hash_operation = hashlib.sha256(str(proof**2-prev_proof**2).encode()).hexdigest() # mest be nonsymitrical 
+            if hash_operation[:4] != '0000':
+                return False
+            prev_block = block
+            block_index += 1
+        return True
+    
+    def add_transaction(self, _id, sender, receiver, amount): # create a suitable format for the transaction (to hash later)
+        self.transactions.append({'_id': _id,
+                                  'senders': sender,
+                                  'receiver': receiver,
+                                  'amount': amount})
+        prev_block = self.get_prev_block() # add comments
+        return prev_block['index'] + 1 
+    
+    def add_node(self, address): # network users
+        parsed_url = urlparse(address)
+        self.nodes.add(parsed_url.netloc)
+        
+    def replace_chain(self): # the longest chain survive
+        network = self.nodes
+        longest_chain = None
+        max_length = len(self.chain)
+        for node in network:
+            response = requests.get(f'http://{node}/get_chain')
+            if response.status_code == 200:
+                length = response.json()['length']
+                chain = response.json()['chain']
+                if length > max_length and self.is_chain_valid(chain):
+                    max_length = length
+                    longest_chain = chain
+        if longest_chain: # not None
+            self.chain = longest_chain
+            return True
+        return False # no updates to chain
+            
+        
+###############################
+## part 2 mining block chain #########################################
+###############################
+            
+# create web from falsk
+app = Flask(__name__) 
+# create node address (ports)
+node_address = str(uuid4()).replace('-','')
+# create the blockchain
+database   = Database()
+blockchain = Blockchain()
+database.add_block(blockchain.get_prev_block()) # add genesis
+
+""" 
+TODO #0 don't  start from block 1 check first
+index = database.chain.find().count()
+if index != 0:
+    database.add_block(blockchain.get_prev_block()) # add genesis
+else:
+"""    
+    
+""" 
+TODO #1 genesis error # problem: add genesis block to DB
+info: all have thier own genesis
+initial fix: longest survive
+future fix: genesis = blockchain.get_prev_block()database.add_block(genesis)
+status: solved
+"""
+#database.add_block(blockchain.get_prev_block())
+
+# append a transaction to block before mining
+@app.route('/add_transaction', methods=['POST'])
+def add_transaction():
+    json = request.get_json() # req json file
+    transaction_keys = ['sender', 'receiver', 'amount']
+    if not all (key in json for key in transaction_keys): # keys missing from req
+        response = {'message': 'missing keys'}
+        return jsonify(response), 400
+    transaction_id = database.add_transaction(json);
+    index = blockchain.add_transaction(transaction_id, json['sender'], json['receiver'], json['amount'])
+    response = {'message': f'your transaction will be added to block number {index} with id {transaction_id}'}
+    return jsonify(response), 201
+
+# mining new block 
+@app.route('/mine_block', methods=['POST'])
+def mine_block():
+    
+    json = request.get_json() # req json file
+    transaction_keys = ['sender', 'receiver', 'amount']
+    if not all (key in json for key in transaction_keys): # keys missing from req
+        response = {'message': 'missing keys'}
+        return jsonify(response), 400
+    
+    prev_block = blockchain.get_prev_block() # get genesis
+    prev_proof = prev_block['proof']
+    proof = blockchain.proof_of_work(prev_proof)
+    
+    transaction_id = database.add_transaction(json);
+    blockchain.add_transaction(transaction_id, json['sender'], json['receiver'], json['amount']) # my reward
+    prev_hash = blockchain.hash(prev_block) # genesis has no hash till this line
+    
+    block = blockchain.create_block(proof, prev_hash) 
+    block_id = database.add_block(block)
+    response = {'_id': str(block_id),
+                'index':block['index'],
+                'timestamp':block['timestamp'],
+                'proof':block['proof'],
+                'transactions': block['transactions'],
+                'previous_hash':block['previous_hash']}    
+    return jsonify(response), 200
+
+# getting the full blockchain
+@app.route('/get_chain', methods=['GET'])
+def get_chain():
+    
+    """
+    TODO #3 get directly from database # problem: hash is affected
+    """
+    response = {'chain': blockchain.chain,
+                'length':len(blockchain.chain)}
+    return jsonify(response), 200
+
+# getting the full blockchain
+@app.route('/is_valid', methods=['GET'])
+def is_valid():
+    response = {'valid_chain': blockchain.is_chain_valid(blockchain.chain)}
+    return jsonify(response), 200
+
+
+
+########################################
+## part 3 decentralize the blockchain ##
+########################################
+    
+# connect to new node
+@app.route('/connect_node', methods=['POST'])
+def connect_node():
+    json = request.get_json() # req json file
+    nodes = json.get('nodes') # a file (kinda global) to regester nodes
+    if nodes is None:
+        return 'no nodes to connect', 400
+    for node in nodes:
+        """ 
+        TODO #4 add hub for network connection in front end
+        """
+        database.network.insert_one({'node':node})
+        blockchain.add_node(node)
+    response = {'message': 'nodes connected',
+                'total_nodes': list(blockchain.nodes)}
+    return jsonify(response), 201
+
+# replace by longest chain if exists any
+@app.route('/replace_chain', methods=['GET'])
+def replace_chain():
+    chain_replaced = blockchain.replace_chain()
+    if chain_replaced:
+        response = {'chain_replaced': jsonify(chain_replaced),
+                    'new_chain': blockchain.chain}
+    else:
+         response = {'chain_replaced': chain_replaced}
+    return jsonify(response), 200
+
+# run the app (simple api)
+app.run(host = '0.0.0.0', port = 2000)
