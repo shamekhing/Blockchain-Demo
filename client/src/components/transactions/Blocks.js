@@ -6,7 +6,7 @@ import Spinner from '../layout/Spinner'
 const Blocks = () => {
     
     const transactionsContext = useContext(TransactionsContext) 
-    const {transactions, filtered, loading, getChain} = transactionsContext;
+    const {chain, filteredBlocks, loading, getChain} = transactionsContext;
     
     //console.log(transactions)
     //console.log(transactionsContext.state)
@@ -17,12 +17,12 @@ const Blocks = () => {
     },[])
     return (
         <Fragment>
-            {transactions !== null && !loading ?
+            {chain !== null && !loading ?
                 <Fragment>
                     {
-                    filtered !== null ? 
-                    filtered.map(block => <BlocksItem key={block._id} block={block}/>) : 
-                    transactions.map((block,id) => <BlocksItem key={id} block={block}/>)
+                    filteredBlocks !== null ? 
+                    filteredBlocks.map(block => <BlocksItem key={block._id} block={block}/>) : 
+                    chain.map(block => <BlocksItem key={block._id} block={block}/>)
                     }
                 </Fragment>: 
                 <Spinner/> 

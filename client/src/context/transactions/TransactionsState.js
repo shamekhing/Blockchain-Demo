@@ -1,7 +1,9 @@
-import React, {useReducer} from 'react';
+import React, {useReducer, useContext} from 'react';
 import axios from 'axios' 
 import TransactionsContext from './transactionsContext'
 import transactionsReducer from './transactionsReducer'
+
+import AlertContext from '../alert/alertContext';
 
 import {
     ADD_Tx,
@@ -13,24 +15,28 @@ import {
     CLEAR_FILTER,
     Tx_ERROR,
     GET_Txs,
-    CLEAR_Txs,
     MINE_BLOCK,
     GET_CHAIN,
     CURRENT_BLOCK,
+    FILTER_BLOCKS
 } from '../types'
 
 const TransactionsState = (props) => {
     const intialState = {
-        transactions: [],
         chain: [],
-        current: null,
+        transactions: [],
         filtered: null,
+        filteredBlocks : null,
+        current: null,
+        currentBlock: [],
         error: null,
         loading: false,
-        currentBlock: []
     }
     const [state, dispatch] = useReducer(transactionsReducer, intialState)
-    // actions
+ 
+    // alerts
+    const alertContext = useContext(AlertContext);
+    const { setAlert } = alertContext;
 
     // get Txs
     // add Tx    
@@ -44,7 +50,7 @@ const TransactionsState = (props) => {
                 type: GET_Txs, 
                 payload: res.data.chain
             })
-            
+            setAlert(res.data.msg)
         } 
         catch (err) {
             dispatch({
@@ -53,8 +59,14 @@ const TransactionsState = (props) => {
             });
         }
     }
-    // Get Contacts
-  
+    // check if any field empty
+    const checkProperties = (obj) => {
+        for (var key in obj) {
+            if (obj[key] === null && obj[key] == "")
+                return true;
+        }
+        return false;
+    }
     // add Tx    
     const addTx = async (transaction) => {
         const config = {
@@ -62,21 +74,27 @@ const TransactionsState = (props) => {
               'Content-Type': 'application/json'
             }
         };     
-        
-        try {
-            const res = await axios.post('http://localhost:5000/add_transaction', transaction, config);
-            dispatch({
-                type: ADD_Tx, 
-                payload: res.data.chain
-            })
-            //console.log(res.data.chain)
-            //console.log(state)
-        } 
-        catch (err) {
-            dispatch({
-              type: Tx_ERROR,
-              payload: err.response.msg
-            });
+        const {sender, receiver, amount} = transaction
+        if (sender ==''|| receiver==''|| amount==''){
+            setAlert("please enter all fields")
+        }
+        else
+        {
+            try {
+                const res = await axios.post('http://localhost:5000/add_transaction', transaction, config);
+                dispatch({
+                    type: ADD_Tx, 
+                    payload: res.data.chain
+                })
+                setAlert(res.data.msg)
+            } 
+            catch (err) {
+                dispatch({
+                type: Tx_ERROR,
+                payload: err.response.msg
+                });
+            }
+            getChain()
         }
     }
     // del Tx
@@ -87,6 +105,7 @@ const TransactionsState = (props) => {
                 type: DELETE_Tx, 
                 payload: _id
             })
+            setAlert(res.data.msg)
         } 
         catch (err) {
             dispatch({
@@ -104,7 +123,7 @@ const TransactionsState = (props) => {
             }
         };     
         const {sender, receiver, amount} = transaction
-        console.log(transaction)
+        //console.log(transaction)
         const data = {
             sender:sender,
             receiver:receiver,
@@ -116,6 +135,7 @@ const TransactionsState = (props) => {
                 type: UPDATE_Tx, 
                 payload: transaction
             })
+            setAlert(res.data.msg)
             getTx()
         } 
         catch (err) {
@@ -143,7 +163,7 @@ const TransactionsState = (props) => {
         dispatch({type: CLEAR_FILTER})
     }
     // mine block
-    const mineBlock = async(transaction) => {
+    const mineBlock = async() => {
         //console.log(transaction)
         const config = {
             headers: {
@@ -151,13 +171,12 @@ const TransactionsState = (props) => {
             }
         };     
         try {
-            const res = await axios.post('http://localhost:5000/mine_block', transaction, config);
+            const res = await axios.post('http://localhost:5000/mine_block', {"sender":"system","receiver":"miner","amount":"reward"}, config);
             dispatch({
                 type: MINE_BLOCK, 
                 payload: res
             })
-            //console.log(res.data.chain)
-            console.log(res)
+            setAlert(res.data.msg)
         } 
         catch (err) {
             dispatch({
@@ -165,42 +184,51 @@ const TransactionsState = (props) => {
               payload: err.response.msg
             });
         }
+        getChain()
     }
     const getChain = async() => {
         try {
             const res = await axios.get('http://localhost:5000/get_chain');
-            console.log(res)
+            //console.log(res)
             //state.loading=true
             dispatch({
                 type: GET_CHAIN, 
                 payload: res.data.chain
             })
-            
+            setAlert(res.data.msg)
         } 
         catch (err) {
             dispatch({
               type: Tx_ERROR,
               payload: err.response.msg
             });
-            getChain()
         }
     }
+    // bring selected block transactions
     const setCurrentBlock = (transactions) => {
-        console.log(transactions)
+        //console.log(transactions)
         dispatch({
             type: CURRENT_BLOCK,
             payload: transactions
           });
+          console.log(state)
     }
-
+    // filter blocks
+    const filterBlocks = (text) => {
+        dispatch({type: FILTER_BLOCKS, payload: text})
+        //console.log(state.filterBlocks)
+    }
     return (
         <TransactionsContext.Provider
             value = {{
+                chain:state.chain,
                 transactions: state.transactions,
                 filtered : state.filtered,
+                filteredBlocks: state.filteredBlocks,
                 current: state.current,
-                error: state.error,
                 currentBlock:state.currentBlock,
+                error: state.error,
+                
                 addTx,
                 deleteTx,
                 updateTx,
@@ -212,6 +240,7 @@ const TransactionsState = (props) => {
                 mineBlock,
                 getChain,
                 setCurrentBlock,
+                filterBlocks,
             }}
         >
             {props.children}

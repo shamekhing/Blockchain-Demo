@@ -9,14 +9,23 @@ const TransactionForm = () => {
     const { current, clearCurrent,updateTx,mineBlock } = transactionsContext;
 
   useEffect(() => {
-    if (current !== null) {
-      setTransaction(current);
-    } else {
-      setTransaction({
-        sender: '',
-        receiver: '',
-        amount: '',
-      });
+
+    /*if(sender===''||receiver===''|amount===''){
+
+    }
+    else*/
+    {
+      if (current !== null) {
+        setTransaction(current);
+      } 
+      else 
+      {
+        setTransaction({
+          sender: '',
+          receiver: '',
+          amount: '',
+        });
+      }
     }
   }, [transactionsContext, current]);
 
@@ -46,12 +55,7 @@ const TransactionForm = () => {
     clearCurrent();
   };
   
-  const mine = () => {
-    //setTransaction({...transaction,sender:'system',receiver:'miner', amount:'reward'})
-    //console.log(transaction)
-    mineBlock(transaction)
-    clearAll();
-  }
+  
   return (
     <form onSubmit={onSubmit}>
       <h2 className='text-primary'>
@@ -87,7 +91,7 @@ const TransactionForm = () => {
         />
         <button
           className='btn btn-dark btn-sm'
-          onClick={() => mine()}
+          onClick={() =>  mineBlock()}
         >
           Mine Block
         </button>

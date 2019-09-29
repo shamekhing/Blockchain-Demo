@@ -21,8 +21,8 @@ const BlockTransactions = () => {
                 <Fragment>
                     {
                     filtered !== null ? 
-                    filtered.map(transaction => <TransactionItem key={transaction._id} hide={"True"} transaction={transaction}/>) : 
-                    currentBlock.map((transaction,id) => <TransactionItem key={id} hide={"True"} transaction={transaction}/>)
+                    filtered.map(transaction => <TransactionItem key={transaction._id} msg="mined" hide={"True"} transaction={transaction}/>) : 
+                    currentBlock.map((transaction,id) => <TransactionItem key={id} msg="mined" hide={"True"} transaction={transaction}/>)
                     }
                 </Fragment>: 
                 <Spinner/> 

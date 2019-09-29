@@ -11,7 +11,8 @@ import {
     CLEAR_Txs,
     MINE_BLOCK,
     GET_CHAIN,
-    CURRENT_BLOCK
+    CURRENT_BLOCK,
+    FILTER_BLOCKS,
 } from '../types'
 
 export default (state, action) => {
@@ -59,6 +60,15 @@ export default (state, action) => {
                 filtered: state.transactions.filter(transaction => {
                     const regex = new RegExp(`${action.payload}`, 'gi');
                     return transaction._id.match(regex) || transaction.sender.match(regex);
+                })
+            };
+        case FILTER_BLOCKS:
+            console.log(state)
+            return {
+                ...state,
+                filteredBlocks: state.chain.filter(block => {
+                    const regex = new RegExp(`${action.payload}`, 'gi');
+                    return block._id.match(regex) //|| block.index.match(regex);
                 })
             };
         case CLEAR_FILTER:

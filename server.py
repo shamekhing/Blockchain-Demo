@@ -14,7 +14,7 @@ from pymongo import MongoClient
 import requests # catch node for consensus
 from uuid import uuid4 # create addresses for nodes 
 from urllib.parse import urlparse # parse node URL
-from flask_cors import CORS
+from flask_cors import CORS #crossesd of py and js 
 from bson.objectid import ObjectId
 
 
@@ -196,7 +196,7 @@ def add_transaction():
     json = request.get_json() # req json file
     transaction_keys = ['sender', 'receiver', 'amount']
     if not all (key in json for key in transaction_keys): # keys missing from req
-        response = {'msg': 'missing keys'}
+        response = {'msg': 'missing keys or values'}
         return jsonify(response), 400
     transaction_id = database.add_transaction(json);
     index = blockchain.add_transaction(transaction_id, json['sender'], json['receiver'], json['amount'])
@@ -208,21 +208,22 @@ def add_transaction():
 # get Txs
 @app.route('/get_transactions', methods=['GET'])
 def get_transactions():
-    return jsonify({'chain':database.get_transactions()}), 200
+    return jsonify({'msg':'your version of transactions has been updated',
+                    'chain':database.get_transactions()}), 200
 
 # delete
 @app.route('/delete_transaction', methods=['DELETE'])
 def delete_transaction():
     _id=request.args.get('_id');
     database.transactions.delete_one({'_id': ObjectId(_id)})
-    return jsonify({'msg':'deleted'}), 200
+    return jsonify({'msg':'transaction deleted'}), 200
 
 # update
 @app.route('/update_transaction', methods=['PUT'])
 def update_transaction():
     _id=request.args.get('_id');
     database.transactions.update_one({'_id': ObjectId(_id)},{"$set":request.get_json()})
-    return jsonify({'msg':'deleted'}), 200
+    return jsonify({'msg':'transaction successfully updated'}), 200
         
 # mining new block 
 @app.route('/mine_block', methods=['POST'])
@@ -231,7 +232,7 @@ def mine_block():
     json = request.get_json() # req json file
     transaction_keys = ['sender', 'receiver', 'amount']
     if not all (key in json for key in transaction_keys): # keys missing from req
-        response = {'msg': 'missing keys'}
+        response = {'msg': 'missing keys or values'}
         return jsonify(response), 400
     
     prev_block = blockchain.get_prev_block() # get genesis
@@ -262,7 +263,8 @@ def get_chain():
     response = {'chain': blockchain.chain,
                 'length':len(blockchain.chain)}
     """
-    return jsonify({'chain':response}), 200
+    return jsonify({'msg':'your version of chain has been updated',
+                    'chain':response}), 200
 
 # getting the full blockchain
 @app.route('/is_valid', methods=['GET'])

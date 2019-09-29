@@ -6,12 +6,7 @@ const BlocksItem = ({block}) => {
     const transactionsContext = useContext(TransactionsContext);
     const {deleteTx, setCurrentBlock, clearCurrent} = transactionsContext
     const {_id,index,timestamp,proof,transactions,previous_hash} = block
-    //console.log(_id)
-   
-    const onDelete = () => {
-        deleteTx(_id);
-        clearCurrent();
-    };
+    //console.log(block)
 
     return (
         <div className="card bg-light">

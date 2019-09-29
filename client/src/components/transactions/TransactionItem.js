@@ -1,7 +1,7 @@
 import React, {useContext, Fragment} from 'react'
 import TransactionsContext from '../../context/transactions/transactionsContext'
 
-const TransactionItem = ({transaction}) => {
+const TransactionItem = ({transaction,hide='',msg="Bending"}) => {
     //console.log(transaction)
     const transactionsContext = useContext(TransactionsContext);
     const {deleteTx, setCurrent, clearCurrent} = transactionsContext
@@ -16,13 +16,14 @@ const TransactionItem = ({transaction}) => {
     return (
         <div className="card bg-light">
             <h3 className="text-primary text-left">{_id}</h3>
-            <span className="badge badge-danger">Bending</span>
+            <span className="badge badge-danger">{msg}</span>
             <ul className="list">
                 <li><i className="fas fa-share"></i> {sender}</li>
                 <li><i className="fas fa-share-square"></i> { receiver}</li>
                 <li><i className="fas fa-hand-holding-usd"></i> { amount}</li>
             </ul>
          
+            {hide === '' ?
              <p>
                 <button
                 className='btn btn-dark btn-sm'
@@ -35,7 +36,9 @@ const TransactionItem = ({transaction}) => {
                 >
                 Delete
                 </button>
-            </p>
+            </p>:
+            <Fragment></Fragment>
+            }
         </div>
     )
 }
