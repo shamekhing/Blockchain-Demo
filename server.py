@@ -14,7 +14,10 @@ from pymongo import MongoClient
 import requests # catch node for consensus
 from uuid import uuid4 # create addresses for nodes 
 from urllib.parse import urlparse # parse node URL
-#from bson.objectid import ObjectId
+from flask_cors import CORS
+from bson.objectid import ObjectId
+
+
 
 ################################
 ## part 1 building blockchain ##
@@ -36,6 +39,13 @@ class Database:
         self.transactions = self.db.bending_transactions 
         self.chain = self.db.chain
 
+    def get_transactions(self):
+        result = []
+        transactions = self.transactions.find()
+        for transaction in transactions:
+            transaction['_id'] = str(transaction['_id'])
+            result.append(transaction)
+        return result
         
     def add_transaction(self, transaction):
         transaction_id = self.transactions.insert_one(transaction).inserted_id
@@ -55,6 +65,14 @@ class Database:
         block_id = self.chain.insert_one(data).inserted_id
         self.transactions.drop() # clear transactions 
         return str(block_id)
+    
+    def get_chain(self):
+        result = []
+        transactions = self.chain.find()
+        for block in transactions:
+            block['_id'] = str(block['_id'])
+            result.append(block)    
+        return result
         
 
 class Blockchain:
@@ -147,6 +165,7 @@ class Blockchain:
             
 # create web from falsk
 app = Flask(__name__) 
+CORS(app)
 # create node address (ports)
 node_address = str(uuid4()).replace('-','')
 # create the blockchain
@@ -177,13 +196,34 @@ def add_transaction():
     json = request.get_json() # req json file
     transaction_keys = ['sender', 'receiver', 'amount']
     if not all (key in json for key in transaction_keys): # keys missing from req
-        response = {'message': 'missing keys'}
+        response = {'msg': 'missing keys'}
         return jsonify(response), 400
     transaction_id = database.add_transaction(json);
     index = blockchain.add_transaction(transaction_id, json['sender'], json['receiver'], json['amount'])
-    response = {'message': f'your transaction will be added to block number {index} with id {transaction_id}'}
+    results = database.get_transactions()
+    response = {'msg': f' added to block number {index} with id {transaction_id}',
+                'chain': results}
     return jsonify(response), 201
 
+# get Txs
+@app.route('/get_transactions', methods=['GET'])
+def get_transactions():
+    return jsonify({'chain':database.get_transactions()}), 200
+
+# delete
+@app.route('/delete_transaction', methods=['DELETE'])
+def delete_transaction():
+    _id=request.args.get('_id');
+    database.transactions.delete_one({'_id': ObjectId(_id)})
+    return jsonify({'msg':'deleted'}), 200
+
+# update
+@app.route('/update_transaction', methods=['PUT'])
+def update_transaction():
+    _id=request.args.get('_id');
+    database.transactions.update_one({'_id': ObjectId(_id)},{"$set":request.get_json()})
+    return jsonify({'msg':'deleted'}), 200
+        
 # mining new block 
 @app.route('/mine_block', methods=['POST'])
 def mine_block():
@@ -191,7 +231,7 @@ def mine_block():
     json = request.get_json() # req json file
     transaction_keys = ['sender', 'receiver', 'amount']
     if not all (key in json for key in transaction_keys): # keys missing from req
-        response = {'message': 'missing keys'}
+        response = {'msg': 'missing keys'}
         return jsonify(response), 400
     
     prev_block = blockchain.get_prev_block() # get genesis
@@ -199,7 +239,7 @@ def mine_block():
     proof = blockchain.proof_of_work(prev_proof)
     
     transaction_id = database.add_transaction(json);
-    blockchain.add_transaction(transaction_id, json['sender'], json['receiver'], json['amount']) # my reward
+    blockchain.add_transaction(transaction_id, "system", "miner", "reward") # my reward
     prev_hash = blockchain.hash(prev_block) # genesis has no hash till this line
     
     block = blockchain.create_block(proof, prev_hash) 
@@ -215,13 +255,14 @@ def mine_block():
 # getting the full blockchain
 @app.route('/get_chain', methods=['GET'])
 def get_chain():
-    
+    response = database.get_chain()
     """
     TODO #3 get directly from database # problem: hash is affected
-    """
+    
     response = {'chain': blockchain.chain,
                 'length':len(blockchain.chain)}
-    return jsonify(response), 200
+    """
+    return jsonify({'chain':response}), 200
 
 # getting the full blockchain
 @app.route('/is_valid', methods=['GET'])
@@ -248,7 +289,7 @@ def connect_node():
         """
         database.network.insert_one({'node':node})
         blockchain.add_node(node)
-    response = {'message': 'nodes connected',
+    response = {'msg': 'nodes connected',
                 'total_nodes': list(blockchain.nodes)}
     return jsonify(response), 201
 
@@ -264,4 +305,4 @@ def replace_chain():
     return jsonify(response), 200
 
 # run the app (simple api)
-app.run(host = '0.0.0.0', port = 2000)
+app.run(host = '0.0.0.0', port = 5000)
